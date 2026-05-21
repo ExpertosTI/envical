@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.gitignore
+.claude
+.vite
+coverage
+*.log
+.DS_Store
+README.md
+deploy.sh
