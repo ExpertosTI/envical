@@ -1,4 +1,4 @@
-import { IconPackage } from './icons';
+import { IconCompass } from './icons';
 
 /** Cabecera de marca renace.tech. */
 export function BrandHeader() {
@@ -6,7 +6,7 @@ export function BrandHeader() {
     <header className="app__head">
       <div className="brand">
         <span className="brand__mark" aria-hidden="true">
-          <IconPackage size={22} />
+          <IconCompass size={22} />
         </span>
         <span className="brand__text">
           <span className="brand__name">Envios</span>

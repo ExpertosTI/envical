@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   amountToFreeShipping,
   calculateQuote,
-  findWeightTier,
+  findKmTier,
   roundTo,
 } from './shipping-engine';
 import { freshDefaultConfig } from './defaults';
@@ -11,8 +11,7 @@ import type { QuoteInput } from '../types';
 function quote(partial: Partial<QuoteInput> = {}) {
   const config = freshDefaultConfig();
   const input: QuoteInput = {
-    zoneId: 'zone-gsd',
-    weightKg: 0.5,
+    distanceKm: 50,
     orderValue: 0,
     surchargeIds: [],
     ...partial,
@@ -33,46 +32,50 @@ describe('roundTo', () => {
   });
 });
 
-describe('findWeightTier', () => {
-  const tiers = freshDefaultConfig().weightTiers;
-  it('asigna la escala por limite superior', () => {
-    expect(findWeightTier(tiers, 0.5)?.id).toBe('tier-light');
-    expect(findWeightTier(tiers, 1)?.id).toBe('tier-light');
-    expect(findWeightTier(tiers, 3)?.id).toBe('tier-standard');
-    expect(findWeightTier(tiers, 12)?.id).toBe('tier-heavy');
+describe('findKmTier', () => {
+  const tiers = freshDefaultConfig().kmTiers;
+  it('asigna la escala segun la distancia', () => {
+    expect(findKmTier(tiers, 15)?.id).toBe('tier-local');
+    expect(findKmTier(tiers, 30)?.id).toBe('tier-local');
+    expect(findKmTier(tiers, 50)?.id).toBe('tier-regional');
+    expect(findKmTier(tiers, 100)?.id).toBe('tier-regional');
+    expect(findKmTier(tiers, 150)?.id).toBe('tier-nacional');
   });
   it('todo lo que supere el tope cae en la escala abierta', () => {
-    expect(findWeightTier(tiers, 999)?.id).toBe('tier-over');
+    expect(findKmTier(tiers, 999)?.id).toBe('tier-largo');
   });
   it('sin escalas devuelve null', () => {
-    expect(findWeightTier([], 5)).toBeNull();
+    expect(findKmTier([], 50)).toBeNull();
   });
 });
 
 describe('calculateQuote', () => {
-  it('suma tarifa de zona y cargo de peso', () => {
-    const result = quote({ zoneId: 'zone-santiago', weightKg: 3 });
-    // Santiago 350 + escala estandar 150 = 500
-    expect(result.subtotal).toBe(500);
-    expect(result.total).toBe(500);
+  it('calcula: tarifaBase + tarifaPorKm * km', () => {
+    // tier-regional: baseFare 350 + 4/km * 50km = 550; rounded to 5 => 550
+    const result = quote({ distanceKm: 50 });
+    expect(result.subtotal).toBe(550);
+    expect(result.total).toBe(550);
     expect(result.freeShippingApplied).toBe(false);
   });
 
-  it('aplica cargo por kg extra en la escala de sobrepeso', () => {
-    // Sobrepeso: rate 600 + 40/kg sobre 15kg. A 20kg => 600 + 40*5 = 800
-    const result = quote({ zoneId: 'zone-pickup', weightKg: 20 });
-    const weightLine = result.lines.find((l) => l.label.startsWith('Peso'));
-    expect(weightLine?.amount).toBe(800);
+  it('escala local: baseFare + ratePerKm * km', () => {
+    // tier-local: 150 + 6 * 20 = 270
+    const result = quote({ distanceKm: 20 });
+    expect(result.subtotal).toBe(270);
+  });
+
+  it('escala abierta (gran distancia)', () => {
+    // tier-largo: 900 + 2.5 * 400 = 1900
+    const result = quote({ distanceKm: 400 });
+    expect(result.subtotal).toBe(1900);
   });
 
   it('recargo fijo y porcentual', () => {
     const result = quote({
-      zoneId: 'zone-pickup',
-      weightKg: 0.5,
+      distanceKm: 0,
       orderValue: 1000,
       surchargeIds: ['sur-fragile', 'sur-cod'],
     });
-    // fragil 150 fijo + COD 3% de 1000 = 30
     const fragile = result.lines.find((l) => l.label.includes('fragil'));
     const cod = result.lines.find((l) => l.label.includes('COD'));
     expect(fragile?.amount).toBe(150);
@@ -80,27 +83,28 @@ describe('calculateQuote', () => {
   });
 
   it('envio gratis al superar el umbral', () => {
-    const result = quote({ zoneId: 'zone-sur', weightKg: 10, orderValue: 5000 });
+    const result = quote({ distanceKm: 200, orderValue: 5000 });
     expect(result.freeShippingApplied).toBe(true);
     expect(result.total).toBe(0);
     expect(result.subtotal).toBeGreaterThan(0);
   });
 
-  it('avisa cuando no hay zona seleccionada', () => {
-    const result = quote({ zoneId: 'inexistente' });
+  it('avisa cuando la distancia es 0', () => {
+    const result = quote({ distanceKm: 0 });
     expect(result.warnings.length).toBeGreaterThan(0);
   });
 
   it('redondea el total segun la configuracion', () => {
     const config = freshDefaultConfig();
-    config.zones[0].baseRate = 247;
+    config.kmTiers[0].baseFare = 147;
+    config.kmTiers[0].ratePerKm = 0;
+    // baseFare 147 + 0 * km = 147; rounded to 5 => 145
     const result = calculateQuote(config, {
-      zoneId: config.zones[0].id,
-      weightKg: 0.5,
+      distanceKm: 10,
       orderValue: 0,
       surchargeIds: [],
     });
-    expect(result.total).toBe(245);
+    expect(result.total).toBe(145);
     expect(result.rounded).toBe(true);
   });
 });
@@ -108,7 +112,7 @@ describe('calculateQuote', () => {
 describe('amountToFreeShipping', () => {
   it('calcula lo que falta para el envio gratis', () => {
     const config = freshDefaultConfig();
-    expect(amountToFreeShipping(config, 2000)).toBe(1000);
-    expect(amountToFreeShipping(config, 3500)).toBe(0);
+    expect(amountToFreeShipping(config, 3000)).toBe(2000);
+    expect(amountToFreeShipping(config, 5500)).toBe(0);
   });
 });

@@ -1,11 +1,5 @@
 import { useRef, useState } from 'react';
-import type {
-  ShippingConfig,
-  Surcharge,
-  SurchargeKind,
-  WeightTier,
-  Zone,
-} from '../types';
+import type { KmTier, ShippingConfig, Surcharge, SurchargeKind } from '../types';
 import { exportConfig, importConfig, resetConfig } from '../lib/storage';
 import { genId } from '../lib/format';
 import {
@@ -18,13 +12,15 @@ import {
   Toggle,
 } from '../components/ui';
 import {
+  IconBolt,
+  IconDatabase,
   IconDownload,
-  IconGear,
-  IconPackage,
+  IconGift,
   IconPlus,
   IconReset,
+  IconRoad,
+  IconSliders,
   IconTrash,
-  IconTruck,
   IconUpload,
 } from '../components/icons';
 
@@ -44,46 +40,22 @@ export function Settings({
     onChange({ ...config, ...updates });
   }
 
-  /* ---- Zonas ---- */
-  function updateZone(id: string, changes: Partial<Zone>) {
+  /* ---- Tarifas por km ---- */
+  function updateTier(id: string, changes: Partial<KmTier>) {
     patch({
-      zones: config.zones.map((z) => (z.id === id ? { ...z, ...changes } : z)),
-    });
-  }
-  function addZone() {
-    patch({
-      zones: [...config.zones, { id: genId(), name: 'Nueva zona', baseRate: 0 }],
-    });
-  }
-  function removeZone(id: string) {
-    patch({ zones: config.zones.filter((z) => z.id !== id) });
-  }
-
-  /* ---- Escalas de peso ---- */
-  function updateTier(id: string, changes: Partial<WeightTier>) {
-    patch({
-      weightTiers: config.weightTiers.map((t) =>
-        t.id === id ? { ...t, ...changes } : t,
-      ),
+      kmTiers: config.kmTiers.map((t) => (t.id === id ? { ...t, ...changes } : t)),
     });
   }
   function addTier() {
     patch({
-      weightTiers: [
-        ...config.weightTiers,
-        {
-          id: genId(),
-          label: 'Nueva escala',
-          minKg: 0,
-          maxKg: 1,
-          rate: 0,
-          perKgExtra: 0,
-        },
+      kmTiers: [
+        ...config.kmTiers,
+        { id: genId(), label: 'Nueva tarifa', minKm: 0, maxKm: 50, baseFare: 0, ratePerKm: 0 },
       ],
     });
   }
   function removeTier(id: string) {
-    patch({ weightTiers: config.weightTiers.filter((t) => t.id !== id) });
+    patch({ kmTiers: config.kmTiers.filter((t) => t.id !== id) });
   }
 
   /* ---- Recargos ---- */
@@ -98,13 +70,7 @@ export function Settings({
     patch({
       surcharges: [
         ...config.surcharges,
-        {
-          id: genId(),
-          label: 'Nuevo recargo',
-          kind: 'fixed',
-          amount: 0,
-          enabledByDefault: false,
-        },
+        { id: genId(), label: 'Nuevo recargo', kind: 'fixed', amount: 0, enabledByDefault: false },
       ],
     });
   }
@@ -151,7 +117,7 @@ export function Settings({
 
   return (
     <div className="view">
-      <Card title="General" subtitle="Moneda y redondeo" icon={<IconGear />}>
+      <Card title="General" subtitle="Moneda y redondeo" icon={<IconSliders />}>
         <div className="grid2">
           <Field label="Moneda" hint="Simbolo mostrado en los montos.">
             <TextField
@@ -160,7 +126,10 @@ export function Settings({
               ariaLabel="Simbolo de moneda"
             />
           </Field>
-          <Field label="Redondeo" hint="Multiplo al que se redondea el total. 0 = sin redondeo.">
+          <Field
+            label="Redondeo"
+            hint="Multiplo al que se redondea el total. 0 = sin redondeo."
+          >
             <NumberField
               value={config.rounding}
               onChange={(value) => patch({ rounding: value })}
@@ -171,53 +140,13 @@ export function Settings({
       </Card>
 
       <Card
-        title="Zonas de entrega"
-        subtitle="Tarifa base por destino"
-        icon={<IconTruck />}
+        title="Tarifas por kilometro"
+        subtitle="Precio segun la distancia recorrida"
+        icon={<IconRoad />}
       >
         <div className="editors">
-          {config.zones.map((zone) => (
-            <div key={zone.id} className="editor">
-              <div className="editor__grid">
-                <Field label="Nombre">
-                  <TextField
-                    value={zone.name}
-                    onChange={(value) => updateZone(zone.id, { name: value })}
-                    ariaLabel="Nombre de la zona"
-                  />
-                </Field>
-                <Field label="Tarifa base">
-                  <NumberField
-                    value={zone.baseRate}
-                    onChange={(value) => updateZone(zone.id, { baseRate: value })}
-                    prefix={config.currency}
-                    ariaLabel="Tarifa base de la zona"
-                  />
-                </Field>
-              </div>
-              <IconButton
-                variant="danger"
-                label="Eliminar zona"
-                onClick={() => removeZone(zone.id)}
-              >
-                <IconTrash size={18} />
-              </IconButton>
-            </div>
-          ))}
-        </div>
-        <Button variant="ghost" onClick={addZone}>
-          <IconPlus size={18} /> Agregar zona
-        </Button>
-      </Card>
-
-      <Card
-        title="Escalas de peso"
-        subtitle="Tarifa por rango de peso"
-        icon={<IconPackage />}
-      >
-        <div className="editors">
-          {config.weightTiers.map((tier) => {
-            const open = tier.maxKg == null;
+          {config.kmTiers.map((tier) => {
+            const open = tier.maxKm == null;
             return (
               <div key={tier.id} className="editor editor--block">
                 <div className="editor__top">
@@ -228,49 +157,45 @@ export function Settings({
                   />
                   <IconButton
                     variant="danger"
-                    label="Eliminar escala"
+                    label="Eliminar tarifa"
                     onClick={() => removeTier(tier.id)}
                   >
                     <IconTrash size={18} />
                   </IconButton>
                 </div>
                 <div className="editor__grid editor__grid--4">
-                  <Field label="Desde (kg)">
+                  <Field label="Desde (km)">
                     <NumberField
-                      value={tier.minKg}
-                      onChange={(value) => updateTier(tier.id, { minKg: value })}
-                      ariaLabel="Peso minimo"
+                      value={tier.minKm}
+                      onChange={(value) => updateTier(tier.id, { minKm: value })}
+                      ariaLabel="Km minimo"
                     />
                   </Field>
-                  <Field label="Hasta (kg)">
+                  <Field label="Hasta (km)">
                     {open ? (
                       <div className="opentier">Sin tope</div>
                     ) : (
                       <NumberField
-                        value={tier.maxKg ?? 0}
-                        onChange={(value) =>
-                          updateTier(tier.id, { maxKg: value })
-                        }
-                        ariaLabel="Peso maximo"
+                        value={tier.maxKm ?? 0}
+                        onChange={(value) => updateTier(tier.id, { maxKm: value })}
+                        ariaLabel="Km maximo"
                       />
                     )}
                   </Field>
-                  <Field label="Tarifa">
+                  <Field label="Tarifa base">
                     <NumberField
-                      value={tier.rate}
-                      onChange={(value) => updateTier(tier.id, { rate: value })}
+                      value={tier.baseFare}
+                      onChange={(value) => updateTier(tier.id, { baseFare: value })}
                       prefix={config.currency}
-                      ariaLabel="Tarifa de la escala"
+                      ariaLabel="Tarifa base"
                     />
                   </Field>
-                  <Field label="Extra / kg">
+                  <Field label="Por km">
                     <NumberField
-                      value={tier.perKgExtra}
-                      onChange={(value) =>
-                        updateTier(tier.id, { perKgExtra: value })
-                      }
+                      value={tier.ratePerKm}
+                      onChange={(value) => updateTier(tier.id, { ratePerKm: value })}
                       prefix={config.currency}
-                      ariaLabel="Cargo por kg adicional"
+                      ariaLabel="Tasa por km"
                     />
                   </Field>
                 </div>
@@ -279,34 +204,32 @@ export function Settings({
                     checked={open}
                     onChange={(checked) =>
                       updateTier(tier.id, {
-                        maxKg: checked ? null : tier.minKg + 5,
+                        maxKm: checked ? null : tier.minKm + 50,
                       })
                     }
                     ariaLabel="Escala abierta"
                   />
-                  <span>Escala abierta (sin tope superior)</span>
+                  <span>Sin tope de distancia</span>
                 </label>
               </div>
             );
           })}
         </div>
         <Button variant="ghost" onClick={addTier}>
-          <IconPlus size={18} /> Agregar escala
+          <IconPlus size={18} /> Agregar tarifa
         </Button>
       </Card>
 
       <Card
         title="Envio gratis"
         subtitle="Umbral por valor de orden"
-        icon={<IconGear />}
+        icon={<IconGift />}
       >
         <label className="inlinetoggle inlinetoggle--lead">
           <Toggle
             checked={config.freeShipping.enabled}
             onChange={(checked) =>
-              patch({
-                freeShipping: { ...config.freeShipping, enabled: checked },
-              })
+              patch({ freeShipping: { ...config.freeShipping, enabled: checked } })
             }
             ariaLabel="Activar envio gratis"
           />
@@ -319,9 +242,7 @@ export function Settings({
           <NumberField
             value={config.freeShipping.threshold}
             onChange={(value) =>
-              patch({
-                freeShipping: { ...config.freeShipping, threshold: value },
-              })
+              patch({ freeShipping: { ...config.freeShipping, threshold: value } })
             }
             prefix={config.currency}
             ariaLabel="Umbral de envio gratis"
@@ -332,7 +253,7 @@ export function Settings({
       <Card
         title="Recargos"
         subtitle="Servicios adicionales opcionales"
-        icon={<IconGear />}
+        icon={<IconBolt />}
       >
         <div className="editors">
           {config.surcharges.map((surcharge) => (
@@ -340,9 +261,7 @@ export function Settings({
               <div className="editor__top">
                 <TextField
                   value={surcharge.label}
-                  onChange={(value) =>
-                    updateSurcharge(surcharge.id, { label: value })
-                  }
+                  onChange={(value) => updateSurcharge(surcharge.id, { label: value })}
                   ariaLabel="Nombre del recargo"
                 />
                 <IconButton
@@ -369,17 +288,13 @@ export function Settings({
                     <option value="percent">% del valor</option>
                   </select>
                 </Field>
-                <Field
-                  label={surcharge.kind === 'percent' ? 'Porcentaje' : 'Monto'}
-                >
+                <Field label={surcharge.kind === 'percent' ? 'Porcentaje' : 'Monto'}>
                   <NumberField
                     value={surcharge.amount}
                     onChange={(value) =>
                       updateSurcharge(surcharge.id, { amount: value })
                     }
-                    prefix={
-                      surcharge.kind === 'fixed' ? config.currency : undefined
-                    }
+                    prefix={surcharge.kind === 'fixed' ? config.currency : undefined}
                     suffix={surcharge.kind === 'percent' ? '%' : undefined}
                     ariaLabel="Monto del recargo"
                   />
@@ -406,7 +321,7 @@ export function Settings({
       <Card
         title="Datos"
         subtitle="Respaldo y restablecimiento"
-        icon={<IconGear />}
+        icon={<IconDatabase />}
       >
         {notice && (
           <p className={`notice notice--${notice.type}`}>{notice.text}</p>

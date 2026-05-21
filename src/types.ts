@@ -1,25 +1,17 @@
-/** Modelo de datos del configurador de envios. */
+/** Modelo de datos del configurador de envios por km. */
 
-/** Zona geografica de entrega con su tarifa base. */
-export interface Zone {
-  id: string;
-  name: string;
-  /** Tarifa base de la zona, en la moneda configurada. */
-  baseRate: number;
-}
-
-/** Escala de peso. Las escalas se evaluan ascendentemente por `maxKg`. */
-export interface WeightTier {
+/** Escala de distancia en km con tarifa base + tasa por km. */
+export interface KmTier {
   id: string;
   label: string;
-  /** Limite inferior del rango (kg). Base para `perKgExtra`. */
-  minKg: number;
-  /** Limite superior del rango (kg). `null` = escala abierta (tope). */
-  maxKg: number | null;
-  /** Tarifa fija de la escala. */
-  rate: number;
-  /** Cargo adicional por cada kg por encima de `minKg`. */
-  perKgExtra: number;
+  /** Limite inferior del rango (km). */
+  minKm: number;
+  /** Limite superior del rango (km). `null` = escala abierta (sin tope). */
+  maxKm: number | null;
+  /** Tarifa base fija de la escala. */
+  baseFare: number;
+  /** Cargo adicional por cada km recorrido. */
+  ratePerKm: number;
 }
 
 export type SurchargeKind = 'fixed' | 'percent';
@@ -34,21 +26,16 @@ export interface Surcharge {
   label: string;
   kind: SurchargeKind;
   amount: number;
-  /** Si arranca activado en la calculadora. */
   enabledByDefault: boolean;
 }
 
 /** Configuracion completa del motor de calculo. */
 export interface ShippingConfig {
-  /** Simbolo de moneda, ej. "RD$". */
   currency: string;
-  /** Redondea el total al multiplo mas cercano. 0 = sin redondeo. */
   rounding: number;
-  zones: Zone[];
-  weightTiers: WeightTier[];
+  kmTiers: KmTier[];
   freeShipping: {
     enabled: boolean;
-    /** Valor de orden a partir del cual el envio es gratis. */
     threshold: number;
   };
   surcharges: Surcharge[];
@@ -56,10 +43,8 @@ export interface ShippingConfig {
 
 /** Entrada para una cotizacion puntual. */
 export interface QuoteInput {
-  zoneId: string;
-  weightKg: number;
+  distanceKm: number;
   orderValue: number;
-  /** Ids de los recargos activos para esta cotizacion. */
   surchargeIds: string[];
 }
 
@@ -70,15 +55,11 @@ export interface QuoteLine {
 
 /** Resultado de una cotizacion. */
 export interface QuoteResult {
-  /** Desglose: zona, peso y cada recargo. */
   lines: QuoteLine[];
-  /** Suma del desglose, antes de envio gratis y redondeo. */
   subtotal: number;
   freeShippingApplied: boolean;
-  /** Total final (0 si aplica envio gratis), ya redondeado. */
   total: number;
   rounded: boolean;
   currency: string;
-  /** Avisos no bloqueantes para el usuario. */
   warnings: string[];
 }

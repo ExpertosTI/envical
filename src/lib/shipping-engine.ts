@@ -1,9 +1,9 @@
 import type {
+  KmTier,
   ShippingConfig,
   QuoteInput,
   QuoteLine,
   QuoteResult,
-  WeightTier,
 } from '../types';
 
 /** Redondea `value` al multiplo de `step` mas cercano. `step <= 0` => 2 decimales. */
@@ -14,33 +14,27 @@ export function roundTo(value: number, step: number): number {
 }
 
 /**
- * Devuelve la escala de peso aplicable a `weightKg`.
- * Recorre las escalas por `maxKg` ascendente; la escala abierta (maxKg null)
+ * Devuelve la escala de km aplicable a `distanceKm`.
+ * Recorre las escalas por `minKm` ascendente; la escala abierta (maxKm null)
  * actua como tope. Si no hay escalas, devuelve `null`.
  */
-export function findWeightTier(
-  tiers: WeightTier[],
-  weightKg: number,
-): WeightTier | null {
+export function findKmTier(
+  tiers: KmTier[],
+  distanceKm: number,
+): KmTier | null {
   if (tiers.length === 0) return null;
-  const sorted = [...tiers].sort((a, b) => a.minKg - b.minKg);
+  const sorted = [...tiers].sort((a, b) => a.minKm - b.minKm);
   for (const tier of sorted) {
-    if (tier.maxKg == null) return tier;
-    if (weightKg <= tier.maxKg) return tier;
+    if (tier.maxKm == null || distanceKm <= tier.maxKm) return tier;
   }
   return sorted[sorted.length - 1];
 }
 
-function weightChargeFor(tier: WeightTier, weightKg: number): number {
-  const extraKg = Math.max(0, weightKg - tier.minKg);
-  return Math.max(0, tier.rate + tier.perKgExtra * extraKg);
-}
-
 /**
- * Calcula una cotizacion de envio.
+ * Calcula una cotizacion de envio por distancia.
  * Funcion pura: no lee ni escribe estado externo.
  *
- * total = tarifaZona + cargoPeso + recargos
+ * total = tarifaBase + (tarifaPorKm × km) + recargos
  * Si el envio gratis aplica (orderValue >= threshold), total = 0.
  * El total final se redondea segun `config.rounding`.
  */
@@ -51,24 +45,22 @@ export function calculateQuote(
   const warnings: string[] = [];
   const lines: QuoteLine[] = [];
 
-  const weightKg = Math.max(0, toNumber(input.weightKg));
+  const km = Math.max(0, toNumber(input.distanceKm));
   const orderValue = Math.max(0, toNumber(input.orderValue));
 
-  const zone = config.zones.find((z) => z.id === input.zoneId);
-  if (zone) {
-    lines.push({ label: `Zona: ${zone.name}`, amount: Math.max(0, zone.baseRate) });
+  if (km === 0) {
+    warnings.push('Ingresa la distancia en kilometros.');
   } else {
-    warnings.push('Selecciona una zona de entrega.');
-  }
-
-  const tier = findWeightTier(config.weightTiers, weightKg);
-  if (tier) {
-    lines.push({
-      label: `Peso: ${tier.label} (${formatKg(weightKg)} kg)`,
-      amount: weightChargeFor(tier, weightKg),
-    });
-  } else if (config.weightTiers.length === 0) {
-    warnings.push('No hay escalas de peso configuradas.');
+    const tier = findKmTier(config.kmTiers, km);
+    if (tier) {
+      const distanceCharge = Math.max(0, tier.baseFare + tier.ratePerKm * km);
+      lines.push({
+        label: `${km % 1 === 0 ? km : km.toFixed(1)} km — ${tier.label}`,
+        amount: distanceCharge,
+      });
+    } else {
+      warnings.push('No hay tarifas por km configuradas.');
+    }
   }
 
   for (const id of input.surchargeIds) {
@@ -120,8 +112,4 @@ export function amountToFreeShipping(
 function toNumber(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
-}
-
-function formatKg(kg: number): string {
-  return Number.isInteger(kg) ? String(kg) : kg.toFixed(2);
 }

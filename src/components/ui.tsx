@@ -96,6 +96,7 @@ export function NumberField({
   suffix,
   placeholder,
   ariaLabel,
+  hero = false,
 }: {
   value: number;
   onChange: (value: number) => void;
@@ -104,6 +105,7 @@ export function NumberField({
   suffix?: string;
   placeholder?: string;
   ariaLabel?: string;
+  hero?: boolean;
 }) {
   const [draft, setDraft] = useState<string>(() => String(value));
 
@@ -119,14 +121,14 @@ export function NumberField({
   }
 
   return (
-    <div className="numfield">
+    <div className={`numfield${hero ? ' numfield--hero' : ''}`}>
       {prefix && <span className="numfield__affix">{prefix}</span>}
       <input
         className="numfield__input"
         type="text"
         inputMode="decimal"
         value={draft}
-        placeholder={placeholder}
+        placeholder={placeholder ?? (hero ? '0' : undefined)}
         aria-label={ariaLabel}
         onChange={(event) => commit(sanitizeNumeric(event.target.value))}
         onBlur={() => setDraft(String(Math.max(min, draftToNum(draft))))}

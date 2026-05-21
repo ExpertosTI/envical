@@ -1,13 +1,12 @@
-import { IconCalculator, IconGear } from './icons';
+import { IconCompass, IconSliders } from './icons';
 
 export type TabId = 'calc' | 'config';
 
-const TABS: { id: TabId; label: string; icon: typeof IconCalculator }[] = [
-  { id: 'calc', label: 'Calcular', icon: IconCalculator },
-  { id: 'config', label: 'Configurar', icon: IconGear },
+const TABS: { id: TabId; label: string; icon: typeof IconCompass }[] = [
+  { id: 'calc', label: 'Calcular', icon: IconCompass },
+  { id: 'config', label: 'Configurar', icon: IconSliders },
 ];
 
-/** Navegacion inferior tipo app, optimizada para uso con el pulgar. */
 export function BottomNav({
   active,
   onChange,
