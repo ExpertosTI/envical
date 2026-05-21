@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { ShippingConfig } from '../types';
 import {
   amountToFreeShipping,
@@ -12,8 +12,10 @@ import {
   IconCheck,
   IconGift,
   IconOdometer,
+  IconPrint,
   IconTag,
 } from '../components/icons';
+import { PrintTicket } from '../components/PrintTicket';
 
 const QUICK_KM = [15, 50, 100, 155, 250];
 
@@ -23,6 +25,7 @@ export function Calculator({ config }: { config: ShippingConfig }) {
   const [surchargeIds, setSurchargeIds] = useState<string[]>(() =>
     config.surcharges.filter((s) => s.enabledByDefault).map((s) => s.id),
   );
+  const [printTick, setPrintTick] = useState(0);
 
   const quote = useMemo(
     () => calculateQuote(config, { distanceKm, orderValue, surchargeIds }),
@@ -36,11 +39,19 @@ export function Calculator({ config }: { config: ShippingConfig }) {
     ? Math.min(100, (orderValue / config.freeShipping.threshold) * 100)
     : 0;
 
-  function toggleSurcharge(id: string) {
+  const toggleSurcharge = useCallback((id: string) => {
     setSurchargeIds((current) =>
       current.includes(id) ? current.filter((x) => x !== id) : [...current, id],
     );
+  }, []);
+
+  function handlePrint() {
+    setPrintTick(Date.now());
+    // rAF asegura que React re-renderice el ticket con fecha fresca antes de imprimir
+    requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
   }
+
+  const canPrint = quote.lines.length > 0;
 
   return (
     <div className="view">
@@ -181,7 +192,21 @@ export function Calculator({ config }: { config: ShippingConfig }) {
             <IconGift size={15} /> Envio gratis aplicado
           </div>
         )}
+
+        {canPrint && (
+          <button
+            type="button"
+            className="result__printbtn print-hide"
+            onClick={handlePrint}
+            aria-label="Imprimir ticket de cotizacion"
+          >
+            <IconPrint size={16} />
+            Imprimir Ticket
+          </button>
+        )}
       </div>
+
+      <PrintTicket quote={quote} printTick={printTick} />
     </div>
   );
 }

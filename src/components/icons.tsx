@@ -192,3 +192,17 @@ export function IconReset(props: IconProps) {
     </Svg>
   );
 }
+
+/** Impresora — imprimir ticket */
+export function IconPrint(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="6" y="2" width="12" height="7" rx="1" />
+      <path d="M4 9 h16 a1.5 1.5 0 0 1 1.5 1.5 v7 a1.5 1.5 0 0 1-1.5 1.5 H4 a1.5 1.5 0 0 1-1.5-1.5 v-7 A1.5 1.5 0 0 1 4 9Z" />
+      <rect x="6" y="14" width="12" height="8" rx="1" />
+      <line x1="9" y1="17.5" x2="15" y2="17.5" />
+      <line x1="9" y1="20" x2="13" y2="20" />
+      <circle cx="18.5" cy="12" r="1" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
